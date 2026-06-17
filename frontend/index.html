@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Sign Language Detector</title>
+
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"/>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0c0c0f;
+      --surface:   #16161a;
+      --surface2:  #1e1e24;
+      --border:    #2a2a35;
+      --text:      #e8e8f0;
+      --muted:     #6b6b80;
+      --alpha-clr: #4f8ef7;
+      --digit-clr: #f7724f;
+      --green:     #1db97a;
+      --orange:    #f0a033;
+      --red:       #e24b4a;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    header {
+      padding: 1rem 2rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .logo { display: flex; align-items: center; gap: 12px; }
+    .logo-icon {
+      width: 40px; height: 40px;
+      background: linear-gradient(135deg, var(--alpha-clr), var(--digit-clr));
+      border-radius: 11px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; color: #fff;
+    }
+    .logo-text h1  { font-size: 17px; font-weight: 600; }
+    .logo-text span { font-size: 12px; color: var(--muted); display: block; margin-top: 1px; }
+
+    /* ── Model Toggle ── */
+    .model-toggle {
+      display: flex;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 4px;
+      gap: 4px;
+    }
+    .toggle-btn {
+      padding: 8px 18px;
+      border-radius: 9px;
+      border: none;
+      background: transparent;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+    .toggle-btn i { font-size: 13px; }
+    .toggle-btn.active-alpha { background: var(--alpha-clr); color: #fff; }
+    .toggle-btn.active-digit { background: var(--digit-clr); color: #fff; }
+    .toggle-btn:not(.active-alpha):not(.active-digit):hover {
+      background: var(--border); color: var(--text);
+    }
+
+    /* ── Layout ── */
+    main {
+      max-width: 1040px;
+      margin: 0 auto;
+      padding: 1.5rem;
+      display: grid;
+      grid-template-columns: 1fr 320px;
+      gap: 1.25rem;
+      align-items: start;
+    }
+    @media (max-width: 720px) { main { grid-template-columns: 1fr; } }
+
+    /* ── Camera ── */
+    .camera-wrap {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 4/3;
+      background: #0a0a0c;
+      border-radius: 14px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 12px;
+    }
+    #video {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      transform: scaleX(-1);
+      display: none;
+    }
+    .cam-placeholder {
+      display: flex; flex-direction: column;
+      align-items: center; gap: 12px; color: var(--muted);
+      text-align: center;
+    }
+    .cam-placeholder i  { font-size: 48px; color: #2a2a35; }
+    .cam-placeholder p  { font-size: 14px; }
+
+    /* ROI box */
+    .roi-box {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 220px; height: 220px;
+      border-radius: 14px;
+      display: none;
+      pointer-events: none;
+    }
+    .roi-box.alpha { border: 2px dashed rgba(79,142,247,0.55); }
+    .roi-box.digit { border: 2px dashed rgba(247,114,79,0.55); }
+    .roi-label {
+      position: absolute; top: -22px; left: 50%;
+      transform: translateX(-50%);
+      font-size: 11px; color: rgba(255,255,255,0.35);
+      white-space: nowrap;
+    }
+
+    /* Prediction badge */
+    .pred-badge {
+      position: absolute; top: 12px; left: 12px;
+      background: rgba(0,0,0,0.82);
+      border-radius: 13px;
+      padding: 12px 16px;
+      display: none;
+      flex-direction: column; gap: 3px;
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,0.06);
+      min-width: 130px;
+    }
+    .pred-letter {
+      font-size: 42px; font-weight: 700; line-height: 1;
+      transition: color 0.3s;
+    }
+    .pred-letter.alpha { color: var(--alpha-clr); }
+    .pred-letter.digit { color: var(--digit-clr); }
+    .pred-conf { font-size: 12px; color: rgba(255,255,255,0.4); }
+    .pred-mode-tag {
+      font-size: 10px; font-weight: 700;
+      letter-spacing: 0.07em; text-transform: uppercase;
+      margin-top: 2px; display: flex; align-items: center; gap: 4px;
+    }
+    .pred-mode-tag i    { font-size: 9px; }
+    .pred-mode-tag.alpha { color: var(--alpha-clr); }
+    .pred-mode-tag.digit { color: var(--digit-clr); }
+
+    /* Confidence bar */
+    .conf-bar-wrap {
+      position: absolute; bottom: 12px; left: 12px; right: 12px;
+      display: none;
+    }
+    .conf-bar-bg {
+      height: 4px; background: rgba(255,255,255,0.08);
+      border-radius: 2px; overflow: hidden;
+    }
+    .conf-bar-fill {
+      height: 100%; width: 0%; border-radius: 2px;
+      transition: width 0.2s, background 0.2s;
+    }
+
+    /* Ping dot */
+    .ping {
+      position: absolute; top: 12px; right: 12px;
+      width: 10px; height: 10px; border-radius: 50%; display: none;
+    }
+    .ping.active { display: block; animation: pulse 1.2s infinite; }
+    .ping.alpha  { background: var(--alpha-clr); }
+    .ping.digit  { background: var(--digit-clr); }
+    @keyframes pulse {
+      0%,100% { opacity:1; transform:scale(1); }
+      50%      { opacity:0.3; transform:scale(1.6); }
+    }
+
+    /* Camera buttons */
+    .cam-controls { display: flex; gap: 10px; }
+    .btn-start {
+      flex: 1; padding: 12px 16px;
+      border: none; border-radius: 10px;
+      font-size: 14px; font-weight: 600;
+      cursor: pointer; transition: all 0.2s;
+      display: flex; align-items: center;
+      justify-content: center; gap: 8px;
+    }
+    .btn-start i { font-size: 13px; }
+    .btn-start.alpha { background: var(--alpha-clr); color: #fff; }
+    .btn-start.digit { background: var(--digit-clr); color: #fff; }
+    .btn-start:hover  { filter: brightness(1.12); }
+    .btn-start:active { transform: scale(0.97); }
+
+    .btn-stop {
+      flex: 1; padding: 12px 16px;
+      background: var(--surface2); color: var(--red);
+      border: 1px solid var(--border); border-radius: 10px;
+      font-size: 14px; font-weight: 600; cursor: pointer;
+      display: none; align-items: center;
+      justify-content: center; gap: 8px;
+      transition: background 0.2s;
+    }
+    .btn-stop i   { font-size: 13px; }
+    .btn-stop:hover { background: var(--border); }
+
+    /* ── Sidebar cards ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 1.1rem 1.25rem;
+      margin-bottom: 1rem;
+    }
+    .card-label {
+      font-size: 11px; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.07em;
+      margin-bottom: 10px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .card-label i { font-size: 11px; }
+
+    /* Mode indicator */
+    .mode-indicator {
+      display: flex; align-items: center; gap: 9px;
+      padding: 9px 13px; border-radius: 9px;
+      font-size: 13px; font-weight: 500;
+      margin-bottom: 14px; transition: all 0.3s;
+    }
+    .mode-indicator i    { font-size: 14px; }
+    .mode-indicator.alpha {
+      background: rgba(79,142,247,0.1); color: var(--alpha-clr);
+      border: 1px solid rgba(79,142,247,0.2);
+    }
+    .mode-indicator.digit {
+      background: rgba(247,114,79,0.1); color: var(--digit-clr);
+      border: 1px solid rgba(247,114,79,0.2);
+    }
+
+    /* Output text */
+    .output-display {
+      min-height: 56px; font-size: 20px; font-weight: 600;
+      letter-spacing: 0.04em; color: var(--text);
+      word-break: break-all; line-height: 1.4;
+    }
+    .output-empty { font-size: 14px; color: var(--muted); font-weight: 400; }
+    .cursor {
+      display: inline-block; width: 2px; height: 22px;
+      background: var(--text); margin-left: 2px;
+      vertical-align: middle;
+      animation: blink 1s step-end infinite;
+    }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+    .output-bar {
+      height: 3px; border-radius: 2px;
+      margin: 10px 0; background: var(--border); overflow: hidden;
+    }
+    .output-bar-fill {
+      height: 100%; width: 0%; border-radius: 2px;
+      transition: width 0.2s, background 0.2s;
+    }
+
+    /* Mini action buttons */
+    .mini-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+    .mini-btn {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px; padding: 6px 12px;
+      font-size: 12px; color: var(--muted); cursor: pointer;
+      transition: all 0.15s;
+      display: flex; align-items: center; gap: 5px;
+    }
+    .mini-btn i   { font-size: 11px; }
+    .mini-btn:hover { background: var(--border); color: var(--text); }
+
+    /* Stats */
+    .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .stat {
+      background: var(--surface2); border-radius: 10px; padding: 10px 12px;
+    }
+    .stat-val { font-size: 22px; font-weight: 600; }
+    .stat-val.alpha { color: var(--alpha-clr); }
+    .stat-val.digit { color: var(--digit-clr); }
+    .stat-lbl {
+      font-size: 11px; color: var(--muted); margin-top: 2px;
+      display: flex; align-items: center; gap: 4px;
+    }
+    .stat-lbl i { font-size: 10px; }
+
+    /* Tips */
+    .tips { list-style: none; }
+    .tips li {
+      font-size: 13px; color: var(--muted);
+      padding: 7px 0; border-bottom: 1px solid var(--surface2);
+      display: flex; align-items: flex-start; gap: 9px; line-height: 1.4;
+    }
+    .tips li:last-child { border: none; }
+    .tip-icon { font-size: 13px; flex-shrink: 0; margin-top: 1px; }
+    .tip-icon.alpha { color: var(--alpha-clr); }
+    .tip-icon.digit { color: var(--digit-clr); }
+
+    /* API warning */
+    .api-warning {
+      background: rgba(240,160,51,0.08);
+      border: 1px solid rgba(240,160,51,0.25);
+      border-radius: 10px; padding: 10px 14px;
+      font-size: 13px; color: var(--orange);
+      margin-bottom: 12px; display: none;
+      align-items: center; gap: 8px;
+    }
+    .api-warning i { font-size: 14px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">
+      <i class="fa-solid fa-hands-asl-interpreting"></i>
+    </div>
+    <div class="logo-text">
+      <h1>Sign Language Detector</h1>
+      <span>Real-time ASL recognition</span>
+    </div>
+  </div>
+
+  <!-- Model Toggle -->
+  <div class="model-toggle">
+    <button class="toggle-btn active-alpha" id="btnAlpha" onclick="switchMode('alphabets')">
+      <i class="fa-solid fa-font"></i> Alphabets
+    </button>
+    <button class="toggle-btn" id="btnDigit" onclick="switchMode('digits')">
+      <i class="fa-solid fa-hashtag"></i> Numbers
+    </button>
+  </div>
+</header>
+
+<main>
+  <!-- Camera -->
+  <section>
+    <div class="api-warning" id="apiWarning">
+      <i class="fa-solid fa-triangle-exclamation"></i>
+      Could not reach the backend. Make sure your Flask server is running.
+    </div>
+
+    <div class="camera-wrap">
+      <div class="cam-placeholder" id="placeholder">
+        <i class="fa-solid fa-camera-slash"></i>
+        <p>Camera is off — click Start to begin</p>
+      </div>
+      <video id="video" autoplay playsinline></video>
+      <canvas id="canvas" style="display:none"></canvas>
+
+      <div class="roi-box alpha" id="roiBox">
+        <span class="roi-label">Place hand here</span>
+      </div>
+
+      <div class="pred-badge" id="predBadge">
+        <div class="pred-letter alpha" id="predLetter">—</div>
+        <div class="pred-conf"         id="predConf">Waiting...</div>
+        <div class="pred-mode-tag alpha" id="predModeTag">
+          <i class="fa-solid fa-font"></i> Alphabets
+        </div>
+      </div>
+
+      <div class="conf-bar-wrap" id="confBarWrap">
+        <div class="conf-bar-bg">
+          <div class="conf-bar-fill" id="confBarFill"></div>
+        </div>
+      </div>
+
+      <div class="ping alpha" id="ping"></div>
+    </div>
+
+    <div class="cam-controls">
+      <button class="btn-start alpha" id="btnStart" onclick="startCamera()">
+        <i class="fa-solid fa-video"></i> Start Camera
+      </button>
+      <button class="btn-stop" id="btnStop" onclick="stopCamera()">
+        <i class="fa-solid fa-stop"></i> Stop Camera
+      </button>
+    </div>
+  </section>
+
+  <!-- Sidebar -->
+  <aside>
+
+    <!-- Active model + output -->
+    <div class="card">
+      <div class="card-label">
+        <i class="fa-solid fa-microchip"></i> Active Model
+      </div>
+      <div class="mode-indicator alpha" id="modeIndicator">
+        <i class="fa-solid fa-font" id="modeIcon"></i>
+        <span id="modeLabel">Alphabets — detecting A to Z</span>
+      </div>
+
+      <div class="card-label">
+        <i class="fa-solid fa-align-left"></i> Detected Text
+      </div>
+      <div class="output-display" id="outputDisplay">
+        <span class="output-empty" id="emptyMsg">Start signing to see output...</span>
+        <span id="outputText"></span>
+        <span class="cursor" id="cursor" style="display:none"></span>
+      </div>
+      <div class="output-bar">
+        <div class="output-bar-fill" id="outputBarFill"></div>
+      </div>
+      <div class="mini-btns">
+        <button class="mini-btn" onclick="copyText()">
+          <i class="fa-solid fa-copy"></i> Copy
+        </button>
+        <button class="mini-btn" onclick="clearText()">
+          <i class="fa-solid fa-trash"></i> Clear
+        </button>
+        <button class="mini-btn" onclick="addSpace()">
+          <i class="fa-solid fa-grip-lines"></i> Space
+        </button>
+        <button class="mini-btn" onclick="deleteLast()">
+          <i class="fa-solid fa-delete-left"></i> Delete
+        </button>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="card">
+      <div class="card-label">
+        <i class="fa-solid fa-chart-simple"></i> Stats
+      </div>
+      <div class="stats-grid">
+        <div class="stat">
+          <div class="stat-val alpha" id="statDetected">—</div>
+          <div class="stat-lbl">
+            <i class="fa-solid fa-hand"></i> Current sign
+          </div>
+        </div>
+        <div class="stat">
+          <div class="stat-val alpha" id="statConf">—</div>
+          <div class="stat-lbl">
+            <i class="fa-solid fa-gauge-high"></i> Confidence
+          </div>
+        </div>
+        <div class="stat">
+          <div class="stat-val alpha" id="statCount">0</div>
+          <div class="stat-lbl">
+            <i class="fa-solid fa-check-double"></i> Signs captured
+          </div>
+        </div>
+        <div class="stat">
+          <div class="stat-val alpha" id="statLength">0</div>
+          <div class="stat-lbl">
+            <i class="fa-solid fa-ruler-horizontal"></i> Output length
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tips -->
+    <div class="card">
+      <div class="card-label">
+        <i class="fa-solid fa-circle-info"></i> Tips
+      </div>
+      <ul class="tips" id="tipsList">
+        <li>
+          <i class="fa-solid fa-hand-pointer tip-icon alpha"></i>
+          Place your hand inside the dashed box
+        </li>
+        <li>
+          <i class="fa-solid fa-clock tip-icon alpha"></i>
+          Hold each sign still for about 1 second
+        </li>
+        <li>
+          <i class="fa-solid fa-sun tip-icon alpha"></i>
+          Good lighting facing your hand helps accuracy
+        </li>
+        <li>
+          <i class="fa-solid fa-space-awesome tip-icon alpha"></i>
+          Sign SPACE to add a gap between words
+        </li>
+        <li>
+          <i class="fa-solid fa-delete-left tip-icon alpha"></i>
+          Sign DEL to remove the last letter
+        </li>
+      </ul>
+    </div>
+
+  </aside>
+</main>
+
+<script>
+  // ══════════════════════════════════════════════
+  // 👇 UPDATE THIS TO YOUR RENDER URL TO GO LIVE
+  const API_URL = 'http://localhost:5000';
+  // ══════════════════════════════════════════════
+
+  let currentMode = 'alphabets';
+  let stream      = null;
+  let timer       = null;
+  let isRunning   = false;
+  let output      = '';
+  let signCount   = 0;
+  let lastLabel   = '';
+  let stableCount = 0;
+  const STABLE    = 20;
+
+  const video         = document.getElementById('video');
+  const canvas        = document.getElementById('canvas');
+  const ctx           = canvas.getContext('2d');
+  const placeholder   = document.getElementById('placeholder');
+  const roiBox        = document.getElementById('roiBox');
+  const predBadge     = document.getElementById('predBadge');
+  const predLetter    = document.getElementById('predLetter');
+  const predConf      = document.getElementById('predConf');
+  const predModeTag   = document.getElementById('predModeTag');
+  const confBarFill   = document.getElementById('confBarFill');
+  const confBarWrap   = document.getElementById('confBarWrap');
+  const ping          = document.getElementById('ping');
+  const btnStart      = document.getElementById('btnStart');
+  const btnStop       = document.getElementById('btnStop');
+  const outputText    = document.getElementById('outputText');
+  const emptyMsg      = document.getElementById('emptyMsg');
+  const cursor        = document.getElementById('cursor');
+  const outputBarFill = document.getElementById('outputBarFill');
+  const apiWarning    = document.getElementById('apiWarning');
+
+  // ── Switch Model ─────────────────────────────
+  function switchMode(mode) {
+    currentMode   = mode;
+    const isAlpha = mode === 'alphabets';
+    const cls     = isAlpha ? 'alpha' : 'digit';
+
+    // Header toggle buttons
+    document.getElementById('btnAlpha').className =
+      'toggle-btn' + (isAlpha ? ' active-alpha' : '');
+    document.getElementById('btnDigit').className =
+      'toggle-btn' + (!isAlpha ? ' active-digit' : '');
+
+    // Swap colour class on all themed elements
+    const themed = [
+      roiBox, predLetter, predModeTag, ping, btnStart,
+      document.getElementById('modeIndicator')
+    ];
+    themed.forEach(el => {
+      el.classList.remove('alpha', 'digit');
+      el.classList.add(cls);
+    });
+
+    // Stat values
+    ['statDetected','statConf','statCount','statLength'].forEach(id => {
+      const el = document.getElementById(id);
+      el.classList.remove('alpha','digit');
+      el.classList.add(cls);
+    });
+
+    // Mode icon + label
+    const modeIcon  = document.getElementById('modeIcon');
+    const modeLabel = document.getElementById('modeLabel');
+    if (isAlpha) {
+      modeIcon.className  = 'fa-solid fa-font';
+      modeLabel.textContent = 'Alphabets — detecting A to Z';
+      predModeTag.innerHTML = '<i class="fa-solid fa-font"></i> Alphabets';
+      btnStart.innerHTML    = '<i class="fa-solid fa-video"></i> Start Camera';
+      document.getElementById('tipsList').innerHTML = `
+        <li><i class="fa-solid fa-hand-pointer tip-icon alpha"></i>Place your hand inside the dashed box</li>
+        <li><i class="fa-solid fa-clock tip-icon alpha"></i>Hold each sign still for about 1 second</li>
+        <li><i class="fa-solid fa-sun tip-icon alpha"></i>Good lighting facing your hand helps accuracy</li>
+        <li><i class="fa-solid fa-space-awesome tip-icon alpha"></i>Sign SPACE to add a gap between words</li>
+        <li><i class="fa-solid fa-delete-left tip-icon alpha"></i>Sign DEL to remove the last letter</li>
+      `;
+    } else {
+      modeIcon.className  = 'fa-solid fa-hashtag';
+      modeLabel.textContent = 'Numbers — detecting 0 to 9';
+      predModeTag.innerHTML = '<i class="fa-solid fa-hashtag"></i> Numbers';
+      btnStart.innerHTML    = '<i class="fa-solid fa-video"></i> Start Camera';
+      document.getElementById('tipsList').innerHTML = `
+        <li><i class="fa-solid fa-hand-pointer tip-icon digit"></i>Place your hand inside the dashed box</li>
+        <li><i class="fa-solid fa-clock tip-icon digit"></i>Hold each number sign still for ~1 second</li>
+        <li><i class="fa-solid fa-sun tip-icon digit"></i>Good lighting facing your hand helps accuracy</li>
+        <li><i class="fa-solid fa-rotate-left tip-icon digit"></i>Use Clear to reset the number sequence</li>
+        <li><i class="fa-solid fa-delete-left tip-icon digit"></i>Use Delete to remove the last digit</li>
+      `;
+    }
+
+    // Reset detection state
+    lastLabel   = '';
+    stableCount = 0;
+    predLetter.textContent = '—';
+    predConf.textContent   = 'Waiting...';
+  }
+
+  // ── Camera ───────────────────────────────────
+  async function startCamera() {
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: 640, height: 480 },
+        audio: false
+      });
+      video.srcObject           = stream;
+      video.style.display       = 'block';
+      placeholder.style.display = 'none';
+      roiBox.style.display      = 'block';
+      predBadge.style.display   = 'flex';
+      confBarWrap.style.display = 'block';
+      btnStart.style.display    = 'none';
+      btnStop.style.display     = 'flex';
+      isRunning = true;
+      timer = setInterval(detect, 300);
+    } catch(e) {
+      alert('Camera access denied. Please allow camera access and reload the page.');
+    }
+  }
+
+  function stopCamera() {
+    isRunning = false;
+    clearInterval(timer);
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    video.style.display       = 'none';
+    placeholder.style.display = 'flex';
+    roiBox.style.display      = 'none';
+    predBadge.style.display   = 'none';
+    confBarWrap.style.display = 'none';
+    btnStop.style.display     = 'none';
+    btnStart.style.display    = 'flex';
+    ping.classList.remove('active');
+    lastLabel   = '';
+    stableCount = 0;
+  }
+
+  // ── Capture Frame ────────────────────────────
+  function captureFrame() {
+    canvas.width  = 200;
+    canvas.height = 200;
+    const vw   = video.videoWidth;
+    const vh   = video.videoHeight;
+    const size = Math.min(vw, vh) * 0.55;
+    const sx   = (vw - size) / 2;
+    const sy   = (vh - size) / 2;
+    ctx.drawImage(video, sx, sy, size, size, 0, 0, 200, 200);
+    return canvas.toDataURL('image/jpeg', 0.8);
+  }
+
+  // ── Detect ───────────────────────────────────
+  async function detect() {
+    if (!isRunning || video.readyState < 2) return;
+    ping.classList.add('active');
+
+    try {
+      const res = await fetch(`${API_URL}/predict`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: captureFrame(), mode: currentMode })
+      });
+
+      const data = await res.json();
+      apiWarning.style.display = 'none';
+      if (!data.success) return;
+
+      const { label, confidence } = data;
+
+      // Update badge
+      predLetter.textContent = label === 'nothing' ? '—'
+                             : label === 'space'   ? '␣'
+                             : label;
+      predConf.textContent   = `${confidence}% confident`;
+
+      // Confidence bar colour
+      const barColor = confidence > 85 ? 'var(--green)'
+                     : confidence > 60 ? 'var(--orange)'
+                     : 'var(--red)';
+      confBarFill.style.width      = `${confidence}%`;
+      confBarFill.style.background = barColor;
+      outputBarFill.style.width      = `${confidence}%`;
+      outputBarFill.style.background = barColor;
+
+      // Stats
+      document.getElementById('statDetected').textContent = label;
+      document.getElementById('statConf').textContent     = `${confidence}%`;
+
+      // Stable prediction
+      if (label === lastLabel) {
+        stableCount++;
+      } else {
+        stableCount = 0;
+        lastLabel   = label;
+      }
+
+      if (stableCount === STABLE) {
+        if (currentMode === 'alphabets') {
+          if      (label === 'space')   output += ' ';
+          else if (label === 'del')     output = output.slice(0, -1);
+          else if (label !== 'nothing') { output += label; signCount++; }
+        } else {
+          output += label;
+          signCount++;
+        }
+        updateOutput();
+      }
+
+    } catch(e) {
+      apiWarning.style.display = 'flex';
+    }
+
+    ping.classList.remove('active');
+  }
+
+  // ── Output helpers ───────────────────────────
+  function updateOutput() {
+    if (output === '') {
+      emptyMsg.style.display = '';
+      outputText.textContent = '';
+      cursor.style.display   = 'none';
+    } else {
+      emptyMsg.style.display = 'none';
+      outputText.textContent = output;
+      cursor.style.display   = 'inline-block';
+    }
+    document.getElementById('statCount').textContent  = signCount;
+    document.getElementById('statLength').textContent = output.length;
+  }
+
+  function copyText()   { if (output) navigator.clipboard.writeText(output); }
+  function clearText()  { output = ''; signCount = 0; updateOutput(); }
+  function addSpace()   { output += ' '; updateOutput(); }
+  function deleteLast() { output = output.slice(0, -1); updateOutput(); }
+</script>
+</body>
+</html>
