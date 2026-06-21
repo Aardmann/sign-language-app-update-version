@@ -1,3 +1,6 @@
+Using js51828829@gmail.com for supabase login. 
+Usual password to login.
+Encrypt for database: xadnyw-tehkyf-0nuBqi
 # Sign Language Detection 
 
 A real-time American Sign Language (ASL) detection web app that uses a webcam and deep learning to recognise hand signs — supporting both **alphabets (A–Z)** and **numbers (0–9)**. Built with Python, TensorFlow, Flask, and plain HTML/JS.

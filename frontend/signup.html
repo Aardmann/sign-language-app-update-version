@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Sign Up — Sign Language Detector</title>
+
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"/>
+  <link rel="stylesheet" href="assets/styles.css"/>
+
+  <link rel="icon" type="image/png" href="assets/logo.png"/>
+</head>
+<body>
+
+<header class="topnav">
+  <a href="index.html" class="logo-link">
+    <div class="logo-icon"><i class="fa-solid fa-hands-asl-interpreting"></i></div>
+    <div class="logo-text">
+      <h1>Sign Language Detector</h1>
+      <span>Real-time ASL recognition</span>
+    </div>
+  </a>
+  <div class="nav-actions">
+    <a href="signin.html" class="btn btn-ghost btn-sm"><i class="fa-solid fa-right-to-bracket"></i> Sign In</a>
+  </div>
+</header>
+
+<main class="auth-shell">
+  <div class="auth-box">
+    <div class="card">
+      <div class="auth-head">
+        <h2>Create your account</h2>
+        <p>Unlimited sign language detection — no trial timer.</p>
+      </div>
+
+      <div class="form-alert error" id="formError">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <span id="formErrorText"></span>
+      </div>
+      <div class="form-alert success" id="formSuccess">
+        <i class="fa-solid fa-circle-check"></i>
+        <span id="formSuccessText"></span>
+      </div>
+
+      <form id="signupForm" novalidate>
+        <div class="field" id="fUsername">
+          <label for="username">Username</label>
+          <input type="text" id="username" autocomplete="username" placeholder="e.g. aardmann" />
+          <div class="field-error">Username must be at least 3 characters (letters, numbers, underscores).</div>
+        </div>
+
+        <div class="field" id="fFullName">
+          <label for="fullName">Full name</label>
+          <input type="text" id="fullName" autocomplete="name" placeholder="e.g. Adizatu Baah" />
+          <div class="field-error">Please enter your full name.</div>
+        </div>
+
+        <div class="field" id="fEmail">
+          <label for="email">Email</label>
+          <input type="email" id="email" autocomplete="email" placeholder="ekow.gideon@stella.com" />
+          <div class="field-error">Please enter a valid email address.</div>
+        </div>
+
+        <div class="field-row">
+          <div class="field" id="fPassword">
+            <label for="password">Password</label>
+            <input type="password" id="password" autocomplete="new-password" placeholder="••••••••" />
+            <div class="field-error">At least 6 characters.</div>
+          </div>
+          <div class="field" id="fConfirm">
+            <label for="confirmPassword">Re-enter password</label>
+            <input type="password" id="confirmPassword" autocomplete="new-password" placeholder="••••••••" />
+            <div class="field-error">Passwords don't match.</div>
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block" id="submitBtn">
+          <i class="fa-solid fa-user-plus"></i> Create Account
+        </button>
+      </form>
+
+      <div class="form-footer-link">
+        Already have an account? <a href="signin.html">Sign in</a>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="assets/config.js"></script>
+<script src="assets/auth.js"></script>
+<script>
+  Auth.redirectIfLoggedIn();
+
+  const form        = document.getElementById('signupForm');
+  const submitBtn   = document.getElementById('submitBtn');
+  const formError   = document.getElementById('formError');
+  const formSuccess = document.getElementById('formSuccess');
+
+  const fields = {
+    username: { el: document.getElementById('username'), wrap: document.getElementById('fUsername') },
+    fullName: { el: document.getElementById('fullName'), wrap: document.getElementById('fFullName') },
+    email:    { el: document.getElementById('email'),    wrap: document.getElementById('fEmail') },
+    password: { el: document.getElementById('password'), wrap: document.getElementById('fPassword') },
+    confirmPassword: { el: document.getElementById('confirmPassword'), wrap: document.getElementById('fConfirm') }
+  };
+
+  function setFieldError(key, hasError) {
+    fields[key].wrap.classList.toggle('has-error', hasError);
+  }
+
+  function clearAlerts() {
+    formError.classList.remove('show');
+    formSuccess.classList.remove('show');
+  }
+
+  function validate() {
+    let valid = true;
+    const username = fields.username.el.value.trim();
+    const fullName = fields.fullName.el.value.trim();
+    const email    = fields.email.el.value.trim();
+    const password = fields.password.el.value;
+    const confirm  = fields.confirmPassword.el.value;
+
+    const usernameOk = /^[a-zA-Z0-9_]{3,}$/.test(username);
+    setFieldError('username', !usernameOk);
+    if (!usernameOk) valid = false;
+
+    setFieldError('fullName', fullName.length < 2);
+    if (fullName.length < 2) valid = false;
+
+    const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    setFieldError('email', !emailOk);
+    if (!emailOk) valid = false;
+
+    setFieldError('password', password.length < 6);
+    if (password.length < 6) valid = false;
+
+    setFieldError('confirmPassword', confirm !== password || confirm.length === 0);
+    if (confirm !== password || confirm.length === 0) valid = false;
+
+    return valid;
+  }
+
+  function friendlyError(message) {
+    const m = message.toLowerCase();
+    if (m.includes('already registered') || m.includes('already exists')) {
+      return 'An account with that email already exists. Try signing in instead.';
+    }
+    if (m.includes('duplicate') || m.includes('unique')) {
+      return 'That username is already taken. Please choose another.';
+    }
+    if (m.includes('password')) {
+      return 'Password is too weak — use at least 6 characters.';
+    }
+    return message;
+  }
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    clearAlerts();
+    if (!validate()) return;
+
+    const username = fields.username.el.value.trim();
+    const fullName = fields.fullName.el.value.trim();
+    const email    = fields.email.el.value.trim();
+    const password = fields.password.el.value;
+
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="spinner"></span> Creating account...';
+
+    const { data, error } = await Auth.client.auth.signUp({
+      email,
+      password,
+      options: { data: { username, full_name: fullName } }
+    });
+
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = '<i class="fa-solid fa-user-plus"></i> Create Account';
+
+    if (error) {
+      formError.classList.add('show');
+      document.getElementById('formErrorText').textContent = friendlyError(error.message);
+      return;
+    }
+
+    // Trial no longer needed now that they have an account
+    Auth.clearTrial();
+
+    if (data.session) {
+      // Email confirmation is off — they're logged in immediately
+      window.location.href = 'app.html';
+    } else {
+      formSuccess.classList.add('show');
+      document.getElementById('formSuccessText').textContent =
+        'Account created! Check your email to confirm your address, then sign in.';
+      form.reset();
+    }
+  });
+</script>
+</body>
+</html>

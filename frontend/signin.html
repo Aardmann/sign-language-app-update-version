@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Sign In — Sign Language Detector</title>
+
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"/>
+  <link rel="stylesheet" href="assets/styles.css"/>
+
+  <link rel="icon" type="image/png" href="assets/logo.png"/>
+</head>
+<body>
+
+<header class="topnav">
+  <a href="index.html" class="logo-link">
+    <div class="logo-icon"><i class="fa-solid fa-hands-asl-interpreting"></i></div>
+    <div class="logo-text">
+      <h1>Sign Language Detector</h1>
+      <span>Real-time ASL recognition</span>
+    </div>
+  </a>
+  <div class="nav-actions">
+    <a href="signup.html" class="btn btn-ghost btn-sm"><i class="fa-solid fa-user-plus"></i> Sign Up</a>
+  </div>
+</header>
+
+<main class="auth-shell">
+  <div class="auth-box">
+    <div class="card">
+      <div class="auth-head">
+        <h2>Welcome back</h2>
+        <p>Sign in to continue without a trial timer.</p>
+      </div>
+
+      <div class="form-alert error" id="formError">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <span id="formErrorText"></span>
+      </div>
+
+      <form id="signinForm" novalidate>
+        <div class="field" id="fEmail">
+          <label for="email">Email</label>
+          <input type="email" id="email" autocomplete="email" placeholder="ekow.gideon@stella.com" />
+          <div class="field-error">Please enter a valid email address.</div>
+        </div>
+
+        <div class="field" id="fPassword">
+          <label for="password">Password</label>
+          <input type="password" id="password" autocomplete="current-password" placeholder="••••••••" />
+          <div class="field-error">Please enter your password.</div>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block" id="submitBtn">
+          <i class="fa-solid fa-right-to-bracket"></i> Sign In
+        </button>
+      </form>
+
+      <div class="form-footer-link">
+        Don't have an account? <a href="signup.html">Sign up</a>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="assets/config.js"></script>
+<script src="assets/auth.js"></script>
+<script>
+  
+  document.getElementsByClassName('auth-head')[0].getElementsByTagName('h2')[0].textContent = Auth.singnInGreeting();
+
+
+  Auth.redirectIfLoggedIn();
+
+  const form      = document.getElementById('signinForm');
+  const submitBtn = document.getElementById('submitBtn');
+  const formError = document.getElementById('formError');
+  const emailEl   = document.getElementById('email');
+  const passEl    = document.getElementById('password');
+  const fEmail    = document.getElementById('fEmail');
+  const fPassword = document.getElementById('fPassword');
+
+  function friendlyError(message) {
+    const m = message.toLowerCase();
+    if (m.includes('invalid login') || m.includes('invalid credentials')) {
+      return 'Incorrect email or password.';
+    }
+    if (m.includes('email not confirmed')) {
+      return 'Please confirm your email address before signing in.';
+    }
+    return message;
+  }
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    formError.classList.remove('show');
+
+    const email = emailEl.value.trim();
+    const password = passEl.value;
+
+    const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    fEmail.classList.toggle('has-error', !emailOk);
+    fPassword.classList.toggle('has-error', password.length === 0);
+    if (!emailOk || password.length === 0) return;
+
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="spinner"></span> Signing in...';
+
+    const { data, error } = await Auth.client.auth.signInWithPassword({ email, password });
+
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i> Sign In';
+
+    if (error) {
+      formError.classList.add('show');
+      document.getElementById('formErrorText').textContent = friendlyError(error.message);
+      return;
+    }
+
+    Auth.clearTrial();
+    window.location.href = 'app.html';
+  });
+</script>
+</body>
+</html>
