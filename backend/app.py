@@ -16,6 +16,16 @@ models_store = {
 }
 print("Both models loaded!")
 
+# ── Warm up models ────────────────────────────────────────────
+# The first call to a Keras model builds/traces its inference graph,
+# which is slow (can be 1-2s). Do that once now, at startup, instead
+# of on whichever request happens to hit it first.
+print("Warming up models...")
+_dummy = np.zeros((1, 64, 64, 3), dtype=np.float32)
+for _name, _model in models_store.items():
+    _model(_dummy, training=False)
+print("Warm-up complete!")
+
 # ── Class labels ─────────────────────────────────────────────
 CLASS_NAMES = {
     "alphabets": [
@@ -51,11 +61,15 @@ def predict():
         # Preprocess
         img = cv2.resize(img, (IMG_SIZE, IMG_SIZE))
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        img = img / 255.0
+        img = (img / 255.0).astype(np.float32)
         img = np.expand_dims(img, axis=0)
 
-        # Predict with selected model
-        preds      = models_store[mode].predict(img, verbose=0)
+        # Predict with selected model.
+        # Calling the model directly (rather than .predict()) skips the
+        # overhead Keras adds for building a batch/data-pipeline on every
+        # call -- for single-image, low-latency serving this is noticeably
+        # faster.
+        preds      = models_store[mode](img, training=False).numpy()
         pred_idx   = int(np.argmax(preds))
         confidence = float(preds[0][pred_idx])
         label      = CLASS_NAMES[mode][pred_idx]
@@ -78,4 +92,7 @@ def get_models():
     })
 
 if __name__ == '__main__':
-    app.run(debug=False, host='0.0.0.0', port=5000)
+    # threaded=True lets Flask's dev server handle a new /predict request
+    # while a previous one is still finishing, instead of queueing them
+    # one-at-a-time -- important since the frontend polls every ~300ms.
+    app.run(debug=False, host='0.0.0.0', port=5000, threaded=True)
